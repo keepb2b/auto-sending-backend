@@ -1,0 +1,90 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+cython_debug/
+*.cover
+*.log
+.hypothesis/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.python-version
+
+# --- Node / frontend ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Vite
+dist/
+*.timestamp-*.mjs
+.vite/
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Local databases & dumps ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- OS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Editor / IDE ---
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Misc junk ---
+*.tmp
+*.temp
+*.bak
+~$*
