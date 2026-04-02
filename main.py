@@ -10,8 +10,8 @@ from functools import lru_cache
 from urllib.parse import urlparse, parse_qs, unquote
 from dotenv import load_dotenv
 
-# Project .env must win over stale DATABASE_URL in the shell / Windows user env
-_ENV_PATH = os.path.join(os.path.dirname(__file__), "..", ".env")
+# Backend .env must win over stale DATABASE_URL in the shell / Windows user env
+_ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(_ENV_PATH, override=True)
 
 def _parse_database_url(url: str) -> dict:
@@ -618,7 +618,7 @@ async def send_emails_bulk(request: Optional[BulkSendRequest] = Body(default=Non
                 subj = _apply_email_template_vars(base_subject, cn, svc, usr)
                 body = _apply_email_template_vars(base_body, cn, svc, usr)
                 email = company["email"]
-                if email is "送信成功":
+                if email == "送信成功":
                     continue;
                 ok = await sender.send_email(to_email=company["email"],
                     subject=subj, body=body,
