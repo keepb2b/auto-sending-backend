@@ -126,7 +126,6 @@ def rows_to_dicts(cur):
                 d[k] = v.isoformat()
         result.append(d)
     return result
-    
 
 
 def _normalize_company_dict(d: dict) -> dict:
