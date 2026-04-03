@@ -633,7 +633,7 @@ async def send_emails_bulk(request: Optional[BulkSendRequest] = Body(default=Non
                 email = company["email"]
                 if email == "送信成功":
                     continue;
-                print(body)
+                print(base_body)
                 ok = await sender.send_email(to_email=company["email"],
                     subject=subj, body=body,
                     company_name=cn)
