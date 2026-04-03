@@ -1,10 +1,19 @@
 # -*- coding: utf-8 -*-
+import os
+import sys
+
+# Use project venv when present so `python3 main.py` works (PEP 668 blocks system pip).
+if sys.prefix == sys.base_prefix:
+    _venv_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "python3")
+    if os.path.isfile(_venv_py):
+        os.execv(_venv_py, [_venv_py, os.path.abspath(__file__)] + sys.argv[1:])
+
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import importlib.util
-import os, sys, psycopg2, psycopg2.errors, psycopg2.extras
+import psycopg2, psycopg2.errors, psycopg2.extras
 from datetime import datetime
 from functools import lru_cache
 from urllib.parse import urlparse, parse_qs, unquote
@@ -716,4 +725,6 @@ async def upload_csv_to_db():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
