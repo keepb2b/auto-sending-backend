@@ -631,7 +631,7 @@ async def send_emails_bulk(request: Optional[BulkSendRequest] = Body(default=Non
                 subj = _apply_email_template_vars(base_subject, cn, svc, usr)
                 body = _apply_email_template_vars(base_body, cn, svc, usr)
                 email = company["email"]
-                print(base_body)
+                print(body)
 
                 if email == "送信成功":
                     continue;
