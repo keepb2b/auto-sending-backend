@@ -95,8 +95,8 @@ os.makedirs(TEMPLATES_DIR, exist_ok=True)
 
 @lru_cache(maxsize=1)
 def _email_sender_class():
-    """Load automation/mailer.py by path so imports work regardless of cwd or sys.path."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "automation", "mailer.py")
+    """Load sendEmail/mailer.py by path so imports work regardless of cwd or sys.path."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sendEmail", "mailer.py")
     spec = importlib.util.spec_from_file_location("backend_automation_mailer", path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load mailer from {path}")
@@ -126,6 +126,7 @@ def rows_to_dicts(cur):
                 d[k] = v.isoformat()
         result.append(d)
     return result
+    
 
 
 def _normalize_company_dict(d: dict) -> dict:
@@ -565,7 +566,11 @@ async def send_emails_bulk(request: Optional[BulkSendRequest] = Body(default=Non
     2) Fetch every matching company from the DB (Supabase/Postgres via DATABASE_URL) with one SELECT.
     3) For each company, substitute template variables, then send one SMTP message to that row's `email`.
     """
-    EmailSender = _email_sender_class()
+    EmailSender = _email_sender_class();
+
+    print(EmailSender)
+
+
 
     target_status = (request.target_status if request and request.target_status else None) or "新規"
     svc = (request.service_name or "").strip() if request else ""
