@@ -51,8 +51,12 @@ CREATE TABLE IF NOT EXISTS replies (
     subject      TEXT,
     body         TEXT,
     received_at  TIMESTAMP DEFAULT NOW(),
-    read         BOOLEAN DEFAULT FALSE
+    read         BOOLEAN DEFAULT FALSE,
+    message_id   TEXT
 );
+
+-- Dedupe inbound messages (optional; app checks before insert)
+CREATE INDEX IF NOT EXISTS idx_replies_message_id ON replies (message_id) WHERE message_id IS NOT NULL AND message_id <> '';
 
 -- ── Schedules ────────────────────────────────────────────────
 

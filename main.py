@@ -12,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+import asyncio
 import importlib.util
 import psycopg2, psycopg2.errors, psycopg2.extras
 from datetime import datetime
@@ -112,6 +113,17 @@ def _email_sender_class():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod.EmailSender
+
+
+@lru_cache(maxsize=1)
+def _reply_checker_module():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sendEmail", "reply_checker.py")
+    spec = importlib.util.spec_from_file_location("backend_reply_checker", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load reply_checker from {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 # ── DB ────────────────────────────────────────────────────────────────────────
@@ -229,7 +241,8 @@ def init_db():
             CREATE TABLE IF NOT EXISTS replies (
                 id SERIAL PRIMARY KEY, company_id INTEGER,
                 from_email TEXT, subject TEXT, body TEXT,
-                received_at TIMESTAMP DEFAULT NOW(), read BOOLEAN DEFAULT FALSE);
+                received_at TIMESTAMP DEFAULT NOW(), read BOOLEAN DEFAULT FALSE,
+                message_id TEXT);
             CREATE TABLE IF NOT EXISTS schedules (
                 id SERIAL PRIMARY KEY, name TEXT DEFAULT 'Default',
                 send_time TEXT DEFAULT '10:00', daily_limit INTEGER DEFAULT 500,
@@ -256,6 +269,7 @@ def init_db():
                 ),
             )
             print("Seeded default email template (templates was empty)")
+        cur.execute("ALTER TABLE replies ADD COLUMN IF NOT EXISTS message_id TEXT;")
         conn.commit(); cur.close(); conn.close()
         print("DB tables ready")
     except HTTPException as e:
@@ -542,7 +556,15 @@ async def get_replies():
     conn = get_db()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT * FROM replies ORDER BY received_at DESC")
+        cur.execute(
+            """
+            SELECT r.id, r.company_id, r.from_email, r.subject, r.body, r.received_at, r.read, r.message_id,
+                   COALESCE(c.company_name, '') AS company_name
+            FROM replies r
+            LEFT JOIN companies c ON c.id = r.company_id
+            ORDER BY r.received_at DESC NULLS LAST
+            """
+        )
         return rows_to_dicts(cur)
     finally: conn.close()
 
@@ -558,13 +580,15 @@ async def mark_reply_read(reply_id: int):
 @app.post("/api/replies/check")
 async def check_replies_endpoint():
     try:
-        import subprocess
-        automation_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sendEmail")
-        result = subprocess.run([sys.executable, "reply_checker.py"], cwd=automation_dir,
-                                capture_output=True, text=True, timeout=60)
-        return {"message": "Reply check completed", "output": result.stdout[-500:]}
+        mod = _reply_checker_module()
+        result = await asyncio.to_thread(mod.fetch_and_store_replies)
+    except ImportError as e:
+        raise HTTPException(500, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
+    if not result.get("ok"):
+        raise HTTPException(502, result.get("error") or "Reply fetch failed")
+    return result
 
 # ── Send emails ───────────────────────────────────────────────────────────────
 @app.post("/api/send-emails-bulk")
