@@ -62,6 +62,49 @@ def _html_to_text(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+# Gmail / Apple Mail / many clients (English UI): "On Sat, Apr 4, 2026 at 1:47 AM <x@y.com> wrote:"
+_GMAIL_ON_WROTE = re.compile(
+    r"(?:^|[\s\r\n])On (?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+.+?\s+wrote:\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+# Same pattern with numeric dates (some locales)
+_ON_NUMDATE_WROTE = re.compile(
+    r"(?:^|[\s\r\n])On \d{1,2}[./-]\d{1,2}[./-]\d{2,4}.+?\s+wrote:\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _strip_reply_quotations(text: str) -> str:
+    """Keep only the new reply; drop quoted thread (Gmail 'On … wrote:', Outlook blocks, >-quoted lines)."""
+    if not text:
+        return text
+    t = text.strip()
+
+    cut = t.find("-----Original Message-----")
+    if cut != -1:
+        t = t[:cut].strip()
+
+    m = _GMAIL_ON_WROTE.search(t)
+    if m:
+        t = t[: m.start()].strip()
+    else:
+        m2 = _ON_NUMDATE_WROTE.search(t)
+        if m2:
+            t = t[: m2.start()].strip()
+
+    lines = t.splitlines()
+    while lines and not lines[-1].strip():
+        lines.pop()
+    while lines and lines[-1].lstrip().startswith(">"):
+        lines.pop()
+    t = "\n".join(lines).strip()
+
+    lines = t.splitlines()
+    while lines and lines[0].lstrip().startswith(">"):
+        lines.pop(0)
+    return "\n".join(lines).strip()
+
+
 def _extract_body(msg) -> str:
     plain = ""
     html_part = ""
@@ -214,7 +257,7 @@ def fetch_and_store_replies() -> dict[str, Any]:
                     continue
 
                 subject = _decode_header_value(msg.get("Subject"))
-                body = _extract_body(msg).strip()
+                body = _strip_reply_quotations(_extract_body(msg))
                 mid = _message_stable_id(msg, from_addr, subject, raw)
 
                 cur.execute("SELECT 1 FROM replies WHERE message_id = %s", (mid,))
