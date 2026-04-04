@@ -12,6 +12,9 @@ Env (backend/.env):
   IMAP_MAILBOX     — default INBOX
   reply_fetch_days / REPLY_FETCH_DAYS — how far back to search (default 14; use 1 for recent mail)
   SMTP_FROM / SMTP_USER — used to skip messages from our own address
+  REPLY_IMPORT_REQUIRE_PRIOR_SEND — default 1/true: only import when sender matches a company row whose
+    status is メール送信済み or 返信あり (or Sent/Replied). Set 0/false to import any inbox mail from
+    addresses that exist in companies (old behavior).
 """
 from __future__ import annotations
 
@@ -52,6 +55,33 @@ def _decode_header_value(raw: str | None) -> str:
 
 def _normalize_email(addr: str) -> str:
     return (addr or "").strip().lower()
+
+
+def _env_truthy(name: str, default: bool = True) -> bool:
+    v = (os.getenv(name) or "").strip().lower()
+    if not v:
+        return default
+    return v in ("1", "true", "yes", "on")
+
+
+def _company_eligible_for_reply_import(status: str | None) -> bool:
+    """True if we already sent this lead an email from the app (or they already replied once)."""
+    if not status:
+        return False
+    s = str(status).strip()
+    if s in ("メール送信済み", "返信あり"):
+        return True
+    return s.lower() in ("sent", "replied")
+
+
+def _is_auto_generated_reply(msg) -> bool:
+    auto = (msg.get("Auto-Submitted") or "").strip().lower()
+    if auto and auto not in ("no", "none"):
+        return True
+    xar = (msg.get("X-Autoreply") or "").strip().lower()
+    if xar in ("yes", "true", "1"):
+        return True
+    return False
 
 
 def _html_to_text(s: str) -> str:
@@ -255,6 +285,9 @@ def fetch_and_store_replies() -> dict[str, Any]:
                 if _normalize_email(from_addr) in our_addrs:
                     skipped += 1
                     continue
+                if _is_auto_generated_reply(msg):
+                    skipped += 1
+                    continue
 
                 subject = _decode_header_value(msg.get("Subject"))
                 body = _strip_reply_quotations(_extract_body(msg))
@@ -266,12 +299,23 @@ def fetch_and_store_replies() -> dict[str, Any]:
                     continue
 
                 received_at = _parse_received_at(msg)
+                require_prior = _env_truthy("REPLY_IMPORT_REQUIRE_PRIOR_SEND", True)
                 cur.execute(
-                    "SELECT id, company_name FROM companies WHERE LOWER(TRIM(email)) = %s LIMIT 1",
+                    "SELECT id, company_name, status FROM companies WHERE LOWER(TRIM(email)) = %s LIMIT 1",
                     (_normalize_email(from_addr),),
                 )
                 row = cur.fetchone()
-                company_id = int(row[0]) if row else None
+                if require_prior:
+                    if not row:
+                        skipped += 1
+                        continue
+                    company_status = row[2]
+                    if not _company_eligible_for_reply_import(company_status):
+                        skipped += 1
+                        continue
+                    company_id = int(row[0])
+                else:
+                    company_id = int(row[0]) if row else None
 
                 cur.execute(
                     """
