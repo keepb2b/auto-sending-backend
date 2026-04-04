@@ -553,17 +553,25 @@ async def update_schedule(settings: ScheduleSettings):
 # ── Replies ───────────────────────────────────────────────────────────────────
 @app.get("/api/replies")
 async def get_replies():
+    """Only replies whose From address matches a company row with email_status 送信成功 (bulk send success)."""
     conn = get_db()
     try:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT r.id, r.company_id, r.from_email, r.subject, r.body, r.received_at, r.read, r.message_id,
-                   COALESCE(c.company_name, '') AS company_name
-            FROM replies r
-            LEFT JOIN companies c ON c.id = r.company_id
-            ORDER BY r.received_at DESC NULLS LAST
-            """
+            SELECT s.id, s.company_id, s.from_email, s.subject, s.body, s.received_at, s.read, s.message_id, s.company_name
+            FROM (
+                SELECT DISTINCT ON (r.id) r.id, r.company_id, r.from_email, r.subject, r.body, r.received_at, r.read, r.message_id,
+                       COALESCE(c.company_name, '') AS company_name
+                FROM replies r
+                INNER JOIN companies c ON LOWER(TRIM(c.email)) = LOWER(TRIM(r.from_email))
+                WHERE TRIM(COALESCE(c.email_status, '')) = %s
+                  AND c.email IS NOT NULL AND TRIM(c.email) != ''
+                ORDER BY r.id, c.id
+            ) s
+            ORDER BY s.received_at DESC NULLS LAST
+            """,
+            ("送信成功",),
         )
         return rows_to_dicts(cur)
     finally: conn.close()
