@@ -585,6 +585,18 @@ async def mark_reply_read(reply_id: int):
         return {"message": "Marked as read"}
     finally: conn.close()
 
+
+@app.delete("/api/replies/{reply_id}")
+def delete_reply(reply_id: int):
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM replies WHERE id=%s", (reply_id,))
+        conn.commit()
+        return {"message": "Deleted"}
+    finally: conn.close()
+
+
 @app.post("/api/replies/check")
 async def check_replies_endpoint():
     try:
