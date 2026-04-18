@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import smtplib
 import ssl
@@ -12,16 +13,34 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
+logger = logging.getLogger(__name__)
+
+# Same .env as main.py; override=True so backend .env wins over stale shell env (matches main).
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
+
+
+def _env_str(key: str, default: str = "") -> str:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    s = raw.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        s = s[1:-1].strip()
+    return s
 
 
 class EmailSender:
     def __init__(self) -> None:
-        self.host = (os.getenv("SMTP_HOST") or "smtp.gmail.com").strip()
-        self.port = int(os.getenv("SMTP_PORT") or "587")
-        self.user = (os.getenv("SMTP_USER") or "").strip()
-        self.password = (os.getenv("SMTP_PASSWORD") or "").strip()
-        self.from_addr = (os.getenv("SMTP_FROM") or self.user).strip()
+        self.host = _env_str("SMTP_HOST", "smtp.gmail.com") or "smtp.gmail.com"
+        port_raw = _env_str("SMTP_PORT", "587") or "587"
+        try:
+            self.port = int(port_raw)
+        except ValueError:
+            logger.warning("Invalid SMTP_PORT %r; using 587", port_raw)
+            self.port = 587
+        self.user = _env_str("SMTP_USER")
+        self.password = _env_str("SMTP_PASSWORD")
+        self.from_addr = _env_str("SMTP_FROM") or self.user
 
     def _send_sync(self, to_email: str, subject: str, body: str) -> bool:
         if not self.user or not self.password or not to_email:
@@ -45,7 +64,15 @@ class EmailSender:
                     smtp.login(self.user, self.password)
                     smtp.sendmail(from_addr, [to_email], msg.as_string())
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "SMTP send failed host=%s port=%s user=%s to=%s: %s",
+                self.host,
+                self.port,
+                self.user or "(empty)",
+                to_email,
+                e,
+            )
             return False
 
     async def send_email(

@@ -668,14 +668,19 @@ async def send_emails_bulk(request: Optional[BulkSendRequest] = Body(default=Non
             return {"message": "No targets", "sent": 0, "failed": 0, "total": 0}
 
         total = len(targets)
-        sender = EmailSender(); sent = failed = 0
+        sender = EmailSender()
+        if not (sender.user and sender.password):
+            raise HTTPException(
+                503,
+                "SMTP_USER and SMTP_PASSWORD must be set in auto-sending-backend/.env to send mail.",
+            )
+        sent = failed = 0
         for company in targets:
             try:
                 cn = str(company["company_name"])
                 subj = _apply_email_template_vars(base_subject, cn, svc, usr)
                 body = _apply_email_template_vars(base_body, cn, svc, usr)
                 email = company["email"]
-                print('===========================',body)
 
                 if email == "送信成功":
                     continue;
